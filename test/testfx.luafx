@@ -1,0 +1,397 @@
+
+--// -- is a comment in Lua, this file uses a C++ styler
+--// as typically GLSL code dominates
+
+
+--// using lua means we can make use of variables :)
+--// [=[ .. ]=] is a multi-line string in Lua
+defaultvtx = STRING {[=[
+        layout(location = 0) in vec4 attrPosition;
+        layout(location = 1) in vec3 attrNormal;
+        layout(location = 2) in vec2 attrUV;
+        out Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        };
+        void main(void)
+        {
+          // The code generators provide the sys functions/variables
+          // This is completely customizable to your needs
+          SYS_ATTRIBUTES();
+          
+          vec4 worldPos  =   sys_WorldMatrix   * attrPosition;
+          varWorldNormal = ( sys_WorldMatrixIT * vec4( attrNormal, 0.0 ) ).xyz;
+          varWorldPos    = worldPos.xyz;
+          varUV          = attrUV;
+          gl_Position    = sys_ViewProjMatrix * worldPos;
+        }
+      ]=]}
+
+Geometry "standard" {
+  Technique "GLSL::PosNormalUV" {
+    Code "VertexShader" {
+      HEADER "GLSL",
+      defaultvtx,
+    },
+  },
+}
+
+Geometry "shrink" {
+  Group "control" (instanced) {
+    float "scale" {1},
+  },
+  
+  Technique "GLSL::PosNormalUV" {
+    Code "VertexShader" {
+      HEADER "GLSL",
+      defaultvtx,
+    },
+    Code "GeometryShader" {
+      HEADER "GLSL",
+      STRING {[=[
+        layout(triangles) in;
+        layout(triangle_strip,max_vertices=3) out;
+        
+        in Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        }IN[];
+
+        out Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        }OUT;
+        
+        void main(void)
+        {
+          SYS_ATTRIBUTES();
+          
+          vec3 center = vec3(0);
+          for (int i = 0; i < 3; i++){
+            center += IN[i].varWorldPos;;
+          }
+          center /= 3;
+          
+          
+          for (int i = 0; i < 3; i++){
+            vec3 worldPos = IN[i].varWorldPos;
+            worldPos = mix(worldPos,center,(1.0-scale) * 0.5);
+            
+            OUT.varWorldPos    = worldPos;
+            OUT.varWorldNormal = IN[i].varWorldNormal;
+            OUT.varUV          = IN[i].varUV;
+            gl_Position = sys_ViewProjMatrix * vec4(worldPos,1);
+            EmitVertex();
+          }
+        }
+      ]=]}
+    },
+  },
+}
+
+Light "gradient" {
+  Group "instance" (instanced) {
+    vec3 "high",
+    vec3 "mid",
+    vec3 "low",
+    vec3 "direction",
+  },
+  
+  Technique "GLSL::forward" {
+    --// used to group lights with same entry function signatures
+    Code "Ambient" { 
+      STRING {[=[
+        // In the current code generators the
+        // light function must follow this naming convention
+        // The first parameter is also required, rest is up to user.
+        // However, the function signature of all light code blocks
+        // with same name must be consistent
+        void light_gradient( int sys_Light,
+                    in float glossiness,
+                    in vec3 dir,
+                    out vec3 radiance)
+        {
+          float updown = dot(dir,direction);
+          vec3 upper = mix(mid,high,max(0,updown));
+          radiance   = mix(upper,low,-min(0,updown));
+        }
+      ]=]},
+    },
+  },
+}
+
+Light "point" {
+  Group "instance" (instanced) {
+    vec3 "intensity",
+    vec3 "position",
+    float "constantAttenuation",
+    float "linearAttenuation",
+    float "quadraticAttenuation",
+  },
+  Technique "GLSL::forward" {
+    Code "Directional" {
+      STRING {[=[
+        void light_point( int sys_Light,
+                    in vec3 pos,
+                    out vec3 wi,
+                    out vec3 radiance)
+        {
+          float att = 1.0;
+          wi = position - pos;
+          float dist = length(wi);
+          wi = wi / dist;
+          att = 1.0 / (constantAttenuation + (linearAttenuation + quadraticAttenuation * dist) * dist);
+
+          radiance = att * intensity.xyz;
+        }
+      ]=]},
+    },
+  },
+}
+
+
+EnumDef "blend" {
+  "BLEND_ADD",
+  "BLEND_MUL",
+}
+
+--// This group will be referenced by others through "GlobalGroup" keyword
+--// It allows all other references to share the exact same storage of this group
+Global "default" {
+  Group "debug" (shared) {
+    bool "debugActive" {false},
+  },
+}
+
+Material "simple" {
+  GlobalGroup "default" "debug",
+  Group "instance" (instanced) {
+    --// default values are supported
+    vec4  "diffuse" {1},
+    vec4  "specular"  {0.25},
+    float "gloss" {8},
+    enum["blend"] "specblend" {"BLEND_ADD"},
+  },
+  
+  Technique "GLSL::forward" {
+    Options {
+      --// Add custom options to a technique
+      istransparent = false,
+      --// for example to handle proper Geometry/Material linking
+      GeometryTechnique = "GLSL::PosNormalUV",
+    },
+    Code "FragmentShader" {
+      HEADER "GLSL",
+      LIGHTS "GLSL::forward" "Directional",
+      LIGHTS "GLSL::forward" "Ambient",
+      STRING {[=[
+        in Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        };
+        
+        layout(location = 0, index = 0) out vec4 outColor;
+        
+        void main() {
+       
+          vec3 wNormal  = normalize(varWorldNormal);
+          vec3 wPos     = varWorldPos;
+          vec3 wReflect = normalize(reflect(wPos-sys_ViewMatrixI[3].xyz, wNormal));
+          
+          vec4 result = vec4(0);
+          
+          SYS_LIGHT_LOOP ("Directional"){
+            vec3 wIncident;
+            vec3 intensity;
+            SYS_LIGHT(varWorldPos,wIncident,intensity);
+            
+            float ndotl = dot(wIncident,wNormal);
+            vec4 lightcontrib = diffuse * max(0,ndotl);
+            vec3 lightspec = specular * 
+                              pow( max(0,dot(wReflect,wIncident)), gloss);
+            if (ndotl > 0){
+                switch(specblend){
+                case BLEND_ADD:
+                  lightcontrib += lightspec;
+                  break;
+                case BLEND_MUL: // not exactly physically correct ;)
+                  lightcontrib *= lightspec;
+                  break;
+                }
+            }
+            
+            result += vec4(intensity,1) * lightcontrib;
+          }
+          
+          ...
+          
+          SYS_LIGHT_LOOP ("Ambient"){
+            vec3 intensity;
+            // irradiance
+            SYS_LIGHT(1,wNormal,intensity);
+            result += diffuse * vec4(intensity,1);
+            // reflection
+            SYS_LIGHT(gloss,wReflect,intensity);
+            result += specular * vec4(intensity,1);
+          }
+          
+          outColor = result;
+          
+          if (debugActive) {
+            outColor = diffuse;
+          }
+        }
+      ]=]},
+    },
+  },
+}
+
+Material "normals" {
+  GlobalGroup "default" "debug",
+  Technique "GLSL::forward" {
+    Options {
+      istransparent = false,
+      GeometryTechnique = "GLSL::PosNormalUV",
+    },
+    Code "FragmentShader" {
+      HEADER "GLSL",
+      FILE {"testfx_normals.glsl"},
+    },
+  },
+}
+
+Material "ambilit" {
+  GlobalGroup "default" "debug",
+  Group "instance" (instanced) {
+    vec4  "diffuse" {1},
+  },
+  
+  Technique "GLSL::forward" {
+    Options {
+      istransparent = false,
+      GeometryTechnique = "GLSL::PosNormalUV",
+    },
+    Code "FragmentShader" {
+      HEADER "GLSL",
+      LIGHTS "GLSL::forward" "Ambient",
+      STRING {[=[
+        in Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        };
+
+        layout(location = 0, index = 0) out vec4 outColor;
+        
+        void main() {
+          vec4 result = vec4(0);
+          vec3 wNormal = normalize(varWorldNormal);
+        
+          SYS_LIGHT_LOOP ("Ambient"){
+            vec3 intensity;
+            SYS_LIGHT(1,wNormal,intensity);
+            
+            result += diffuse * vec4(intensity,1);
+          }
+          
+          if ( debugActive )
+          {
+            outColor = vec4(1,1,1,1);
+          }
+          else
+          {
+            outColor = result;
+          }
+        }
+      ]=]},
+    },
+  },
+}
+
+
+Material "difflit" {
+  GlobalGroup "default" "debug",
+  Group "instance" (instanced) {
+    vec4  "diffuse" {1},
+    sampler2D "diffusetex"
+  },
+    
+  Technique "GLSL::forward" {
+    Options {
+      istransparent = false,
+      GeometryTechnique = "GLSL::PosNormalUV",
+    },
+    Code "FragmentShader" {
+      HEADER "GLSL",
+      LIGHTS "GLSL::forward" "Directional",
+      STRING {[=[
+        in Interpolants {
+          vec3 varWorldPos;
+          vec3 varWorldNormal;
+          vec2 varUV;
+        };
+
+        layout(location = 0, index = 0) out vec4 outColor;
+        
+        void main() {
+          vec4 result = vec4(0);
+          vec3 wNormal = normalize(varWorldNormal);
+          
+          vec4 diffuseWeight = diffuse * texture(diffusetex, varUV);
+        
+          SYS_LIGHT_LOOP ("Directional"){
+            vec3 wIncident;
+            vec3 intensity;
+            SYS_LIGHT(varWorldPos,wIncident,intensity);
+            
+            float ndotl = dot(wIncident,wNormal);
+            vec4 lightcontrib = diffuseWeight * vec4(intensity,1) * max(0,ndotl);
+            
+            result += lightcontrib;
+          }
+          
+          if ( debugActive )
+          {
+            outColor = vec4(varUV,1,1);
+          }
+          else
+          {
+            outColor = result;
+          }
+        }
+      ]=]},
+    },
+  },
+}
+
+Geometry "hinttest" {
+  Group "mygroup" (shared) {
+    uimageBuffer "imgCounter",
+  },
+  Technique "GLSL::Test" {
+    Code "VertexShader" {
+      HEADER "GLSL",
+      STRING {[=[
+        #extension GL_ARB_shader_image_load_store : enable
+      ]=], parameters = false},
+      PARAMETERHINTS {
+        ["imgCounter"]      = {qualifier = [=[layout(size1x32) coherent]=]},
+      },
+      STRING {[=[
+          layout(location = 0) in vec4 attrPosition;
+
+          void main(void)
+          {
+            imageAtomicAdd(imgCounter,        gl_VertexID, 1u);
+            
+            vec4 worldPos = sys_WorldMatrix * attrPosition;
+            gl_Position   = sys_ViewProjMatrix * worldPos;
+          }
+      ]=]},
+    },
+  },
+}

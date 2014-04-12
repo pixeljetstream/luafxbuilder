@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "luafxbuilder", "luafxbuilder.vcproj", "{065C5DC6-DAE4-4A57-9068-39810D816C41}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "luafxbuildertest", "luafxbuildertest.vcproj", "{065C5DC6-DAE4-4A57-9067-39810D816C41}"
+	ProjectSection(ProjectDependencies) = postProject
+		{065C5DC6-DAE4-4A57-9068-39810D816C41} = {065C5DC6-DAE4-4A57-9068-39810D816C41}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Debug|Win32.ActiveCfg = Debug|Win32
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Debug|Win32.Build.0 = Debug|Win32
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Debug|x64.ActiveCfg = Debug|x64
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Debug|x64.Build.0 = Debug|x64
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Release|Win32.ActiveCfg = Release|Win32
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Release|Win32.Build.0 = Release|Win32
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Release|x64.ActiveCfg = Release|x64
+		{065C5DC6-DAE4-4A57-9068-39810D816C41}.Release|x64.Build.0 = Release|x64
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Debug|Win32.ActiveCfg = Debug|Win32
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Debug|Win32.Build.0 = Debug|Win32
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Debug|x64.ActiveCfg = Debug|x64
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Debug|x64.Build.0 = Debug|x64
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Release|Win32.ActiveCfg = Release|Win32
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Release|Win32.Build.0 = Release|Win32
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Release|x64.ActiveCfg = Release|x64
+		{065C5DC6-DAE4-4A57-9067-39810D816C41}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
